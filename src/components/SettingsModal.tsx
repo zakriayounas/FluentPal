@@ -8,6 +8,10 @@ import {
   HelpCircle,
   Check,
   RotateCcw,
+  Clock,
+  Mic,
+  ArrowRight,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   SessionSettings,
@@ -20,6 +24,9 @@ import {
   SpeakingSpeed,
   TutorVoice,
   EnglishAccent,
+  PausePatience,
+  TurnTakingMode,
+  NativeUpgradeSetting,
 } from '../types';
 
 interface SettingsModalProps {
@@ -78,6 +85,9 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   tutorVoice: 'Zephyr',
   accentPreference: 'American',
   topic: '',
+  pausePatience: 'Patient',
+  turnTakingMode: 'auto',
+  nativeUpgrade: 'When useful',
 };
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -87,8 +97,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSave,
   disabled = false,
 }) => {
-  const [formData, setFormData] = useState<SessionSettings>(settings);
-  const [activeTab, setActiveTab] = useState<'language' | 'mode' | 'tutor' | 'correction'>('language');
+  const [formData, setFormData] = useState<SessionSettings>({
+    ...DEFAULT_SETTINGS,
+    ...settings,
+  });
+  const [activeTab, setActiveTab] = useState<
+    'language' | 'pacing' | 'correction' | 'tutor' | 'mode'
+  >('language');
 
   if (!isOpen) return null;
 
@@ -121,7 +136,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold text-white tracking-tight">Practice Session Settings</h2>
-              <p className="text-xs text-slate-400">Configure your target language, tutor voice, and correction style</p>
+              <p className="text-xs text-slate-400">Configure language, turn-taking patience, native upgrades, and voice</p>
             </div>
           </div>
           <button
@@ -134,58 +149,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-800 bg-slate-950/40 px-6 gap-2 pt-2">
+        <div className="flex border-b border-slate-800 bg-slate-950/40 px-6 gap-1 sm:gap-2 pt-2 overflow-x-auto">
           <button
             id="tab-language"
             type="button"
             onClick={() => setActiveTab('language')}
-            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 pb-2.5 px-2.5 sm:px-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'language'
                 ? 'border-indigo-500 text-indigo-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Languages className="w-4 h-4" />
+            <Languages className="w-4 h-4 shrink-0" />
             Language & Level
           </button>
           <button
-            id="tab-mode"
+            id="tab-pacing"
             type="button"
-            onClick={() => setActiveTab('mode')}
-            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'mode'
+            onClick={() => setActiveTab('pacing')}
+            className={`flex items-center gap-1.5 pb-2.5 px-2.5 sm:px-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+              activeTab === 'pacing'
                 ? 'border-indigo-500 text-indigo-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Sparkles className="w-4 h-4" />
-            Mode & Topic
-          </button>
-          <button
-            id="tab-tutor"
-            type="button"
-            onClick={() => setActiveTab('tutor')}
-            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'tutor'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Volume2 className="w-4 h-4" />
-            Voice & Accent
+            <Clock className="w-4 h-4 shrink-0" />
+            Turn-Taking & Pacing
           </button>
           <button
             id="tab-correction"
             type="button"
             onClick={() => setActiveTab('correction')}
-            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 pb-2.5 px-2.5 sm:px-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'correction'
                 ? 'border-indigo-500 text-indigo-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <HelpCircle className="w-4 h-4" />
-            Corrections
+            <Sparkles className="w-4 h-4 shrink-0 text-amber-400" />
+            Native Upgrades & Recasts
+          </button>
+          <button
+            id="tab-tutor"
+            type="button"
+            onClick={() => setActiveTab('tutor')}
+            className={`flex items-center gap-1.5 pb-2.5 px-2.5 sm:px-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+              activeTab === 'tutor'
+                ? 'border-indigo-500 text-indigo-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Volume2 className="w-4 h-4 shrink-0" />
+            Voice & Accent
+          </button>
+          <button
+            id="tab-mode"
+            type="button"
+            onClick={() => setActiveTab('mode')}
+            className={`flex items-center gap-1.5 pb-2.5 px-2.5 sm:px-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+              activeTab === 'mode'
+                ? 'border-indigo-500 text-indigo-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <HelpCircle className="w-4 h-4 shrink-0" />
+            Scenarios
           </button>
         </div>
 
@@ -276,6 +304,334 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'pacing' && (
+            <div className="space-y-6">
+              {/* Turn-Taking Mode */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                  Turn-Taking Mode
+                </label>
+                <p className="text-xs text-slate-400 mb-3">
+                  Control how the session detects when you have finished speaking.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(
+                    [
+                      {
+                        mode: 'auto' as TurnTakingMode,
+                        title: 'Auto (Recommended)',
+                        desc: 'Uses Live API Voice Activity Detection tuned with extra silence patience so short pauses are never cut off.',
+                        icon: Clock,
+                      },
+                      {
+                        mode: 'manual' as TurnTakingMode,
+                        title: 'Manual (Push-to-Talk / Done Speaking)',
+                        desc: 'Automatic VAD is turned off. You explicitly signal when your turn is done using a prominent button or Spacebar.',
+                        icon: Mic,
+                      },
+                    ]
+                  ).map((opt) => (
+                    <button
+                      key={opt.mode}
+                      type="button"
+                      id={`turn-taking-mode-${opt.mode}`}
+                      onClick={() => setFormData({ ...formData, turnTakingMode: opt.mode })}
+                      className={`p-3.5 rounded-xl border text-left transition-all ${
+                        formData.turnTakingMode === opt.mode
+                          ? 'border-indigo-500 bg-indigo-500/10 text-white'
+                          : 'border-slate-800 bg-slate-800/50 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <opt.icon className="w-4 h-4 text-indigo-400" />
+                          <span className="font-semibold text-sm">{opt.title}</span>
+                        </div>
+                        {formData.turnTakingMode === opt.mode && (
+                          <Check className="w-4 h-4 text-indigo-400" />
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed pl-6">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pause Patience */}
+              <div className="pt-2 border-t border-slate-800/80">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Pause Patience (Silence Duration)
+                  </label>
+                  {formData.turnTakingMode === 'manual' && (
+                    <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                      Applies in Auto mode
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 mb-3">
+                  How long Sam waits in silence before concluding your turn is finished. Tuned directly in the Live API voice activity detector.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {(
+                    [
+                      {
+                        patience: 'Normal' as PausePatience,
+                        label: 'Normal (~1.2s)',
+                        desc: 'Brisk, fast-paced conversational tempo.',
+                      },
+                      {
+                        patience: 'Patient' as PausePatience,
+                        label: 'Patient (~2.5s)',
+                        desc: 'Default. Ample breathing room to think mid-sentence.',
+                      },
+                      {
+                        patience: 'Very patient' as PausePatience,
+                        label: 'Very patient (~4.0s)',
+                        desc: 'Extended silence window for complex formulation.',
+                      },
+                    ]
+                  ).map((p) => (
+                    <button
+                      key={p.patience}
+                      type="button"
+                      id={`patience-${p.patience.toLowerCase().replace(/[^a-z]/g, '-')}`}
+                      onClick={() => setFormData({ ...formData, pausePatience: p.patience })}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        formData.pausePatience === p.patience
+                          ? 'border-indigo-500 bg-indigo-500/10 text-white'
+                          : 'border-slate-800 bg-slate-800/50 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="font-semibold text-sm flex items-center justify-between">
+                        <span>{p.label}</span>
+                        {formData.pausePatience === p.patience && (
+                          <Check className="w-3.5 h-3.5 text-indigo-400" />
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">{p.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Patience Tips Note */}
+              <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-start gap-2.5 text-xs text-slate-300">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  <strong className="text-white">Pro-tip:</strong> If you ever need a moment during your conversation, simply say <span className="text-indigo-300 font-mono font-semibold">&ldquo;wait&rdquo;</span>, <span className="text-indigo-300 font-mono font-semibold">&ldquo;give me a second&rdquo;</span>, or <span className="text-indigo-300 font-mono font-semibold">&ldquo;let me think&rdquo;</span>. Sam will remain completely silent until you speak again.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'correction' && (
+            <div className="space-y-6">
+              {/* Native Upgrades Setting */}
+              <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <label className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                    Spoken &ldquo;Say it like a native&rdquo; Upgrades
+                  </label>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  After answering you, Sam will highlight a more authentic, idiomatic native phrasing out loud, explain why naturally, and invite you to repeat it.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                  {(
+                    [
+                      {
+                        value: 'When useful' as NativeUpgradeSetting,
+                        label: 'When useful (Default)',
+                        desc: 'Offers spoken upgrades whenever a clearly more natural phrasing exists.',
+                      },
+                      {
+                        value: 'Every turn' as NativeUpgradeSetting,
+                        label: 'Every turn',
+                        desc: 'Consistently provides a native upgrade after every sentence you speak.',
+                      },
+                      {
+                        value: 'Off' as NativeUpgradeSetting,
+                        label: 'Off',
+                        desc: 'Disables spoken native upgrades; keeps dialogue strictly conversational.',
+                      },
+                    ]
+                  ).map((nu) => (
+                    <button
+                      key={nu.value}
+                      type="button"
+                      id={`native-upgrade-opt-${nu.value.toLowerCase().replace(/[^a-z]/g, '-')}`}
+                      onClick={() => setFormData({ ...formData, nativeUpgrade: nu.value })}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        formData.nativeUpgrade === nu.value
+                          ? 'border-amber-500 bg-amber-500/15 text-white'
+                          : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="font-semibold text-xs sm:text-sm flex items-center justify-between">
+                        <span>{nu.label}</span>
+                        {formData.nativeUpgrade === nu.value && (
+                          <Check className="w-3.5 h-3.5 text-amber-400" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">{nu.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Strictness */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                  Correction Strictness
+                </label>
+                <div className="space-y-2.5">
+                  {(
+                    [
+                      'Gentle (major errors only)',
+                      'Balanced',
+                      'Strict (every error)',
+                    ] as CorrectionStrictness[]
+                  ).map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      id={`strictness-${st.substring(0, 4).toLowerCase()}`}
+                      onClick={() => setFormData({ ...formData, strictness: st })}
+                      className={`w-full p-3 rounded-xl border text-left transition-all ${
+                        formData.strictness === st
+                          ? 'border-indigo-500 bg-indigo-500/10 text-white'
+                          : 'border-slate-800 bg-slate-800/50 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="font-semibold text-sm">{st}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">
+                        {st.startsWith('Gentle') && 'Corrects only mistakes that hinder understanding; prioritizes flow.'}
+                        {st === 'Balanced' && 'Recasts natural errors (1-2 per turn) while maintaining pleasant dialogue.'}
+                        {st.startsWith('Strict') && 'Zeroes in on minor prepositions, grammar, and pronunciation nuances.'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Timing */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                  Correction Timing
+                </label>
+                <div className="space-y-2">
+                  {(
+                    [
+                      'Instant (right after I finish speaking)',
+                      'Batched (every few turns)',
+                      'End-of-session only',
+                    ] as CorrectionTiming[]
+                  ).map((tm) => (
+                    <button
+                      key={tm}
+                      type="button"
+                      id={`timing-${tm.substring(0, 4).toLowerCase()}`}
+                      onClick={() => setFormData({ ...formData, timing: tm })}
+                      className={`w-full p-2.5 rounded-xl border text-left text-sm transition-all ${
+                        formData.timing === tm
+                          ? 'border-indigo-500 bg-indigo-500/10 text-white font-medium'
+                          : 'border-slate-800 bg-slate-800/50 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      {tm}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'tutor' && (
+            <div className="space-y-5">
+              {/* Tutor Voice */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                  Tutor Voice (Gemini Live API)
+                </label>
+                <div className="space-y-2">
+                  {TUTOR_VOICES.map((v) => (
+                    <button
+                      key={v.voice}
+                      type="button"
+                      id={`voice-${v.voice.toLowerCase()}`}
+                      onClick={() => setFormData({ ...formData, tutorVoice: v.voice })}
+                      className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+                        formData.tutorVoice === v.voice
+                          ? 'border-indigo-500 bg-indigo-500/10 text-white'
+                          : 'border-slate-800 bg-slate-800/50 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div>
+                        <span className="font-semibold text-sm">{v.label}</span>
+                        <p className="text-xs text-slate-400 mt-0.5">{v.tone}</p>
+                      </div>
+                      {formData.tutorVoice === v.voice && <Check className="w-5 h-5 text-indigo-400" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Speaking Speed */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                  Speaking Speed of Tutor
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Slow', 'Normal', 'Native'] as SpeakingSpeed[]).map((spd) => (
+                    <button
+                      key={spd}
+                      type="button"
+                      id={`speed-${spd.toLowerCase()}`}
+                      onClick={() => setFormData({ ...formData, speed: spd })}
+                      className={`p-2.5 rounded-xl border text-center text-sm font-medium transition-all ${
+                        formData.speed === spd
+                          ? 'border-indigo-500 bg-indigo-500/10 text-white'
+                          : 'border-slate-800 bg-slate-800/50 text-slate-400 hover:border-slate-700 hover:text-white'
+                      }`}
+                    >
+                      {spd}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* English Accent (Only for English target) */}
+              {formData.targetLanguage === 'English' && (
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                    English Accent Preference
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {(['American', 'British', 'Australian', 'Neutral'] as EnglishAccent[]).map((acc) => (
+                      <button
+                        key={acc}
+                        type="button"
+                        id={`accent-${acc.toLowerCase()}`}
+                        onClick={() => setFormData({ ...formData, accentPreference: acc })}
+                        className={`p-2 rounded-xl border text-center text-xs font-medium transition-all ${
+                          formData.accentPreference === acc
+                            ? 'border-indigo-500 bg-indigo-500/10 text-white'
+                            : 'border-slate-800 bg-slate-800/50 text-slate-400 hover:border-slate-700 hover:text-white'
+                        }`}
+                      >
+                        {acc}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -374,157 +730,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder:text-slate-500"
                 />
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'tutor' && (
-            <div className="space-y-5">
-              {/* Tutor Voice */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                  Tutor Voice (Gemini Live API)
-                </label>
-                <div className="space-y-2">
-                  {TUTOR_VOICES.map((v) => (
-                    <button
-                      key={v.voice}
-                      type="button"
-                      id={`voice-${v.voice.toLowerCase()}`}
-                      onClick={() => setFormData({ ...formData, tutorVoice: v.voice })}
-                      className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-                        formData.tutorVoice === v.voice
-                          ? 'border-indigo-500 bg-indigo-500/10 text-white'
-                          : 'border-slate-800 bg-slate-800/50 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
-                      }`}
-                    >
-                      <div>
-                        <span className="font-semibold text-sm">{v.label}</span>
-                        <p className="text-xs text-slate-400 mt-0.5">{v.tone}</p>
-                      </div>
-                      {formData.tutorVoice === v.voice && <Check className="w-5 h-5 text-indigo-400" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Speaking Speed */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                  Speaking Speed of Tutor
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['Slow', 'Normal', 'Native'] as SpeakingSpeed[]).map((spd) => (
-                    <button
-                      key={spd}
-                      type="button"
-                      id={`speed-${spd.toLowerCase()}`}
-                      onClick={() => setFormData({ ...formData, speed: spd })}
-                      className={`p-2.5 rounded-xl border text-center text-sm font-medium transition-all ${
-                        formData.speed === spd
-                          ? 'border-indigo-500 bg-indigo-500/10 text-white'
-                          : 'border-slate-800 bg-slate-800/50 text-slate-400 hover:border-slate-700 hover:text-white'
-                      }`}
-                    >
-                      {spd}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* English Accent (Only for English target) */}
-              {formData.targetLanguage === 'English' && (
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                    English Accent Preference
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {(['American', 'British', 'Australian', 'Neutral'] as EnglishAccent[]).map((acc) => (
-                      <button
-                        key={acc}
-                        type="button"
-                        id={`accent-${acc.toLowerCase()}`}
-                        onClick={() => setFormData({ ...formData, accentPreference: acc })}
-                        className={`p-2 rounded-xl border text-center text-xs font-medium transition-all ${
-                          formData.accentPreference === acc
-                            ? 'border-indigo-500 bg-indigo-500/10 text-white'
-                            : 'border-slate-800 bg-slate-800/50 text-slate-400 hover:border-slate-700 hover:text-white'
-                        }`}
-                      >
-                        {acc}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'correction' && (
-            <div className="space-y-5">
-              {/* Strictness */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                  Correction Strictness
-                </label>
-                <div className="space-y-2.5">
-                  {(
-                    [
-                      'Gentle (major errors only)',
-                      'Balanced',
-                      'Strict (every error)',
-                    ] as CorrectionStrictness[]
-                  ).map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      id={`strictness-${st.substring(0, 4).toLowerCase()}`}
-                      onClick={() => setFormData({ ...formData, strictness: st })}
-                      className={`w-full p-3 rounded-xl border text-left transition-all ${
-                        formData.strictness === st
-                          ? 'border-indigo-500 bg-indigo-500/10 text-white'
-                          : 'border-slate-800 bg-slate-800/50 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
-                      }`}
-                    >
-                      <div className="font-semibold text-sm">{st}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">
-                        {st.startsWith('Gentle') && 'Corrects only mistakes that hinder understanding; prioritizes flow.'}
-                        {st === 'Balanced' && 'Recasts natural errors (1-2 per turn) while maintaining pleasant dialogue.'}
-                        {st.startsWith('Strict') && 'Zeroes in on minor prepositions, grammar, and pronunciation nuances.'}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Timing */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                  Correction Timing
-                </label>
-                <div className="space-y-2">
-                  {(
-                    [
-                      'Instant (right after I finish speaking)',
-                      'Batched (every few turns)',
-                      'End-of-session only',
-                    ] as CorrectionTiming[]
-                  ).map((tm) => (
-                    <button
-                      key={tm}
-                      type="button"
-                      id={`timing-${tm.substring(0, 4).toLowerCase()}`}
-                      onClick={() => setFormData({ ...formData, timing: tm })}
-                      className={`w-full p-2.5 rounded-xl border text-left text-sm transition-all ${
-                        formData.timing === tm
-                          ? 'border-indigo-500 bg-indigo-500/10 text-white font-medium'
-                          : 'border-slate-800 bg-slate-800/50 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
-                      }`}
-                    >
-                      {tm}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
           )}

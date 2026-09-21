@@ -2,7 +2,7 @@ import express from 'express';
 import http from 'http';
 import path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
-import { GoogleGenAI, Modality, Type, FunctionDeclaration } from '@google/genai';
+import { GoogleGenAI, Modality, Type, FunctionDeclaration, EndSensitivity } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 
@@ -61,9 +61,38 @@ const logCorrectionDeclaration: FunctionDeclaration = {
   },
 };
 
+const logNativeUpgradeDeclaration: FunctionDeclaration = {
+  name: 'log_native_upgrade',
+  description:
+    'Log a spoken "Say it like a native" upgrade when you suggest a more natural, idiomatic native phrasing. Call this silently; do not read the tool call aloud.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      original: {
+        type: Type.STRING,
+        description: 'What the user said.',
+      },
+      native_version: {
+        type: Type.STRING,
+        description: 'The natural, idiomatic native speaker phrasing.',
+      },
+      why_it_sounds_more_native: {
+        type: Type.STRING,
+        description: 'A short sentence explaining why it sounds more natural (collocation, register, rhythm, or phrasal verb).',
+      },
+      register: {
+        type: Type.STRING,
+        description: 'The stylistic register of the native phrasing.',
+        enum: ['casual', 'neutral', 'formal'],
+      },
+    },
+    required: ['original', 'native_version', 'why_it_sounds_more_native', 'register'],
+  },
+};
+
 function buildSystemInstruction(settings: any, previousContext?: string): string {
   const targetLanguage = settings?.targetLanguage || 'English';
-  const level = settings?.level || 'Beginner (A1-A2)';
+  const level = settings?.level || 'Intermediate (B1-B2)';
   const explanationLanguage =
     !settings?.explanationLanguage || settings.explanationLanguage === 'Same as target language'
       ? targetLanguage
@@ -81,8 +110,13 @@ function buildSystemInstruction(settings: any, previousContext?: string): string
   const speed = settings?.speed || 'Normal';
   const accent = targetLanguage === 'English' ? settings?.accentPreference || 'neutral' : 'standard native';
   const topic = settings?.topic ? settings.topic : 'General everyday life, hobbies, and interests';
+  const nativeUpgradeSetting = settings?.nativeUpgrade || 'When useful';
 
   let prompt = `You are Sam, a warm, patient, and encouraging native-speaker language partner. The user is practicing ${targetLanguage} at ${level} level. Explain things in ${explanationLanguage} when needed. Correction style: ${strictness}. Correction timing: ${timing}. Mode: ${mode}. Topic: ${topic}. Speaking speed: ${speed}. Accent: ${accent}.
+
+PATIENT TURN-TAKING & PACING:
+- If I pause, hesitate, say filler words (um, uh, hmm, like), or trail off, do NOT jump in. Wait patiently, because I am thinking. Only respond when I have clearly finished my thought. Do not finish my sentences for me. Speak at a calm, unhurried pace and leave a natural beat before you answer.
+- If I say "wait", "give me a second", or "let me think", stay silent until I speak again.
 
 CONVERSATION RULES
 1. Speak mostly in ${targetLanguage}. Match your vocabulary and sentence complexity to the user's level, and speak slightly above it so they keep learning.
@@ -97,9 +131,30 @@ HOW TO CORRECT
 - Also point out unnatural phrasing: "That's grammatically correct, but a native speaker would usually say ..."
 - If the user's sentence was correct and natural, say so briefly to build confidence.
 - Call the \`log_correction\` tool for every correction you make. Do not read the tool call aloud.
-- Never make the user feel judged. Be encouraging and celebrate progress.
+- Never make the user feel judged. Be encouraging and celebrate progress.`;
 
-PRONUNCIATION
+  if (nativeUpgradeSetting !== 'Off') {
+    prompt += `\n\nSPOKEN "SAY IT LIKE A NATIVE" UPGRADE BEHAVIOR:
+${nativeUpgradeSetting === 'Every turn' ? 'After EVERY thing I say' : 'After I finish speaking, whenever a clearly more natural, idiomatic, or native-sounding way to say it exists'}:
+1. First respond naturally to what I said (keep the friendly conversation flowing).
+2. Then, give a spoken "Say it like a native" upgrade out loud in a concise, warm spoken rhythm:
+   - "You said: [my sentence]."
+   - "A more natural way to put it is: [native version]." Speak it clearly at normal native pace.
+   - If helpful or subtle, add one short sentence on why (e.g. "Native speakers usually say 'run into' instead of 'meet by chance' here", or mention collocations, contractions, rhythm, or register).
+   - Invite me to repeat it: "Try saying it that way."
+3. Wait for me to repeat it patiently.
+4. When I repeat it, acknowledge briefly ("Nice!", "Much better!", or a small pronunciation tweak) and continue the conversation with a question.
+
+Native Upgrade Rules:
+- Match the upgrade to my level (${level}). Beginners need accessible phrasing they can immediately reuse; intermediate/advanced learners need idioms, natural collocations, and register nuances.
+- Mention the register when relevant: "That's casual" vs. "In a formal or business setting, you'd say ...".
+- Keep the whole spoken upgrade under about 15 seconds so the conversation keeps moving.
+- If my sentence was already completely natural, say so in a few words and suggest a casual/slang alternative or move on smoothly without forcing changes.
+- If I ask "make it more native", "say it better", or "say that again slower", do this immediately for my previous sentence.
+- Silently call the \`log_native_upgrade\` tool for every native upgrade you provide. Do not read the tool call aloud.`;
+  }
+
+  prompt += `\n\nPRONUNCIATION
 - If a word sounds clearly mispronounced, say the word slowly, describe the sound in simple terms (mouth position, stressed syllable), and ask them to repeat it. Be honest that you may not catch every pronunciation issue from audio alone.
 
 MODES
@@ -137,7 +192,7 @@ async function startServer() {
   // End of session report generation
   app.post('/api/generate-report', async (req, res) => {
     try {
-      const { transcript, corrections, settings, stats } = req.body;
+      const { transcript, corrections, nativeUpgrades, settings, stats } = req.body;
       const ai = getGeminiClient();
 
       const transcriptText = Array.isArray(transcript)
@@ -146,11 +201,20 @@ async function startServer() {
             .join('\n')
         : 'No transcript recorded.';
 
-      const correctionsText = Array.isArray(corrections)
+      const correctionsText = Array.isArray(corrections) && corrections.length > 0
         ? corrections
             .map(
               (c: any, i: number) =>
                 `${i + 1}. [${c.category}] Original: "${c.original}" -> Corrected: "${c.corrected}" (Explanation: ${c.explanation})`
+            )
+            .join('\n')
+        : 'None logged.';
+
+      const nativeUpgradesText = Array.isArray(nativeUpgrades) && nativeUpgrades.length > 0
+        ? nativeUpgrades
+            .map(
+              (u: any, i: number) =>
+                `${i + 1}. [${u.register || 'casual'}] User said: "${u.original}" -> Native: "${u.native_version}" (Why: ${u.why_it_sounds_more_native})`
             )
             .join('\n')
         : 'None logged.';
@@ -168,6 +232,9 @@ ${transcriptText}
 LOGGED CORRECTIONS:
 ${correctionsText}
 
+LOGGED NATIVE PHRASES / UPGRADES:
+${nativeUpgradesText}
+
 Produce a detailed, encouraging, and structured JSON assessment for the learner.
 Include:
 1. summary: A warm, motivating 2-3 sentence overview of the conversation, highlighting fluency attempts and strengths.
@@ -175,7 +242,8 @@ Include:
 3. cefrReasoning: 2-3 sentences justifying why this level was assigned.
 4. topMistakePatterns: Exactly 3 recurring mistake patterns (pattern name, representative example, and a clear explanation).
 5. vocabulary: 8 to 10 useful, high-impact words or idiomatic phrases relevant to what they discussed (with definition/translation and a natural example sentence).
-6. practiceSuggestions: Exactly 3 actionable, specific practice exercises or focus areas for their next session.`;
+6. practiceSuggestions: Exactly 3 actionable, specific practice exercises or focus areas for their next session.
+7. nativePhrases: List of native upgrades and natural alternative phrases highlighted during the session with original phrase, nativeVersion, short explanation, and register (casual, neutral, formal).`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
@@ -216,6 +284,19 @@ Include:
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
               },
+              nativePhrases: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    original: { type: Type.STRING },
+                    nativeVersion: { type: Type.STRING },
+                    explanation: { type: Type.STRING },
+                    register: { type: Type.STRING },
+                  },
+                  required: ['original', 'nativeVersion', 'explanation'],
+                },
+              },
             },
             required: [
               'summary',
@@ -230,10 +311,31 @@ Include:
       });
 
       const reportJson = JSON.parse(response.text || '{}');
+
+      // Guarantee any logged native upgrades from the session are included in the report
+      if (Array.isArray(nativeUpgrades) && nativeUpgrades.length > 0) {
+        const existingMap = new Set(
+          (reportJson.nativePhrases || []).map((p: any) => (p.original || '').toLowerCase().trim())
+        );
+        const mappedFromSession = nativeUpgrades.map((u: any) => ({
+          original: u.original,
+          nativeVersion: u.native_version,
+          explanation: u.why_it_sounds_more_native,
+          register: u.register || 'casual',
+        }));
+        reportJson.nativePhrases = [
+          ...mappedFromSession,
+          ...(reportJson.nativePhrases || []).filter(
+            (p: any) => !existingMap.has((p.original || '').toLowerCase().trim())
+          ),
+        ];
+      }
+
       reportJson.sessionStats = {
         durationSeconds: stats?.durationSeconds || 0,
         turnsCount: transcript?.length || 0,
         correctionsCount: corrections?.length || 0,
+        nativeUpgradesCount: Array.isArray(nativeUpgrades) ? nativeUpgrades.length : 0,
         targetLanguage,
       };
 
@@ -267,7 +369,36 @@ Include:
           const tutorVoice = settings?.tutorVoice || 'Zephyr';
           const systemInstruction = buildSystemInstruction(settings, previousContext);
 
-          console.log(`[Live] Starting Gemini Live session with voice: ${tutorVoice}`);
+          // Configure Voice Activity Detection (VAD) & Turn-Taking
+          const turnTakingMode = settings?.turnTakingMode || 'auto';
+          const pausePatience = settings?.pausePatience || 'Patient';
+
+          let silenceDurationMs = 2500; // default Patient (~2.5s)
+          if (pausePatience === 'Normal') {
+            silenceDurationMs = 1200; // ~1.2s
+          } else if (pausePatience === 'Very patient') {
+            silenceDurationMs = 4000; // ~4.0s
+          }
+
+          const realtimeInputConfig =
+            turnTakingMode === 'manual'
+              ? {
+                  automaticActivityDetection: {
+                    disabled: true,
+                  },
+                }
+              : {
+                  automaticActivityDetection: {
+                    disabled: false,
+                    endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
+                    silenceDurationMs,
+                    prefixPaddingMs: 300,
+                  },
+                };
+
+          console.log(
+            `[Live] Starting Gemini Live session (Voice: ${tutorVoice}, Mode: ${turnTakingMode}, Silence: ${silenceDurationMs}ms)`
+          );
 
           try {
             liveSession = await ai.live.connect({
@@ -280,7 +411,12 @@ Include:
                   },
                 },
                 systemInstruction,
-                tools: [{ functionDeclarations: [logCorrectionDeclaration] }],
+                realtimeInputConfig,
+                tools: [
+                  {
+                    functionDeclarations: [logCorrectionDeclaration, logNativeUpgradeDeclaration],
+                  },
+                ],
                 outputAudioTranscription: {},
                 inputAudioTranscription: {},
               },
@@ -369,12 +505,13 @@ Include:
                     clientWs.send(JSON.stringify({ type: 'turnComplete' }));
                   }
 
-                  // 7. Tool Call: log_correction
+                  // 7. Tool Calls: log_correction and log_native_upgrade
                   if (message.toolCall?.functionCalls) {
                     for (const call of message.toolCall.functionCalls) {
                       if (call.name === 'log_correction' && call.args) {
                         const { original, corrected, explanation, category } = call.args;
-                        const correctionId = call.id || `c-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+                        const correctionId =
+                          call.id || `c-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 
                         clientWs.send(
                           JSON.stringify({
@@ -385,6 +522,40 @@ Include:
                               corrected,
                               explanation,
                               category: category || 'grammar',
+                              timestamp: Date.now(),
+                            },
+                          })
+                        );
+
+                        // Respond to the tool call so Gemini session continues smoothly
+                        try {
+                          liveSession?.sendToolResponse({
+                            functionResponses: [
+                              {
+                                id: call.id,
+                                name: call.name,
+                                response: { output: { logged: true } },
+                              },
+                            ],
+                          });
+                        } catch (toolRespErr) {
+                          console.warn('[Live] Could not send tool response:', toolRespErr);
+                        }
+                      } else if (call.name === 'log_native_upgrade' && call.args) {
+                        const { original, native_version, why_it_sounds_more_native, register } =
+                          call.args;
+                        const upgradeId =
+                          call.id || `nu-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+                        clientWs.send(
+                          JSON.stringify({
+                            type: 'native_upgrade',
+                            upgrade: {
+                              id: upgradeId,
+                              original,
+                              native_version,
+                              why_it_sounds_more_native,
+                              register: register || 'casual',
                               timestamp: Date.now(),
                             },
                           })
@@ -453,6 +624,25 @@ Include:
                 mimeType: 'audio/pcm;rate=16000',
               },
             });
+          }
+        } else if (payload.type === 'activity_start') {
+          // Manual turn-taking: start of user speech
+          if (liveSession) {
+            try {
+              liveSession.sendRealtimeInput({ activityStart: {} });
+            } catch (actErr) {
+              console.warn('[Live] Error sending activityStart:', actErr);
+            }
+          }
+        } else if (payload.type === 'activity_end') {
+          // Manual turn-taking: end of user speech
+          if (liveSession) {
+            try {
+              liveSession.sendRealtimeInput({ activityEnd: {} });
+              liveSession.sendClientContent({ turnComplete: true });
+            } catch (actErr) {
+              console.warn('[Live] Error sending activityEnd:', actErr);
+            }
           }
         } else if (payload.type === 'end') {
           isClosing = true;

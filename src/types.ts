@@ -47,6 +47,12 @@ export type TutorVoice = 'Zephyr' | 'Puck' | 'Kore' | 'Fenrir' | 'Charon';
 
 export type EnglishAccent = 'American' | 'British' | 'Australian' | 'Neutral';
 
+export type PausePatience = 'Normal' | 'Patient' | 'Very patient';
+
+export type TurnTakingMode = 'auto' | 'manual';
+
+export type NativeUpgradeSetting = 'When useful' | 'Every turn' | 'Off';
+
 export interface SessionSettings {
   targetLanguage: TargetLanguage;
   explanationLanguage: TargetLanguage | 'Same as target language';
@@ -60,6 +66,9 @@ export interface SessionSettings {
   tutorVoice: TutorVoice;
   accentPreference: EnglishAccent;
   topic?: string;
+  pausePatience: PausePatience;
+  turnTakingMode: TurnTakingMode;
+  nativeUpgrade: NativeUpgradeSetting;
 }
 
 export type CorrectionCategory =
@@ -76,6 +85,17 @@ export interface Correction {
   corrected: string;
   explanation: string;
   category: CorrectionCategory;
+  timestamp: number;
+}
+
+export type Register = 'casual' | 'neutral' | 'formal';
+
+export interface NativeUpgrade {
+  id: string;
+  original: string;
+  native_version: string;
+  why_it_sounds_more_native: string;
+  register: Register;
   timestamp: number;
 }
 
@@ -102,10 +122,17 @@ export interface SessionReport {
     exampleSentence: string;
   }>;
   practiceSuggestions: string[];
+  nativePhrases?: Array<{
+    original: string;
+    nativeVersion: string;
+    explanation: string;
+    register?: string;
+  }>;
   sessionStats?: {
     durationSeconds: number;
     turnsCount: number;
     correctionsCount: number;
+    nativeUpgradesCount?: number;
     targetLanguage: string;
   };
 }

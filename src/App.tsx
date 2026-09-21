@@ -7,6 +7,7 @@ import {
   Correction,
   SessionReport,
   SavedSession,
+  NativeUpgrade,
 } from './types';
 import { Header } from './components/Header';
 import { LobbyView } from './components/LobbyView';
@@ -61,9 +62,13 @@ export default function App() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [sessionDuration, setSessionDuration] = useState(0);
 
-  // Live Transcripts and Corrections
+  // Live Transcripts, Corrections, and Native Upgrades
   const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
   const [corrections, setCorrections] = useState<Correction[]>([]);
+  const [nativeUpgrades, setNativeUpgrades] = useState<NativeUpgrade[]>([]);
+
+  // Turn-taking state (for manual mode)
+  const [isUserTurn, setIsUserTurn] = useState(true);
 
   // Audio Controls
   const [isMicMuted, setIsMicMuted] = useState(false);
@@ -190,6 +195,8 @@ export default function App() {
     setIsStarting(true);
     setTranscript([]);
     setCorrections([]);
+    setNativeUpgrades([]);
+    setIsUserTurn(true);
     setConnectionStatus('connecting');
 
     try {
@@ -297,11 +304,16 @@ export default function App() {
               audioPlayerRef.current.stopAll();
             }
             setTutorState('listening');
+            setIsUserTurn(true);
           } else if (msg.type === 'turnComplete') {
             setTutorState('listening');
+            setIsUserTurn(true);
           } else if (msg.type === 'correction') {
             const newCorrection: Correction = msg.correction;
             setCorrections((prev) => [newCorrection, ...prev]);
+          } else if (msg.type === 'native_upgrade') {
+            const newUpgrade: NativeUpgrade = msg.upgrade;
+            setNativeUpgrades((prev) => [newUpgrade, ...prev]);
           } else if (msg.type === 'error') {
             console.error('[App] Live server error:', msg.message);
             setErrorMessage(msg.message || 'Error occurred during language session');
@@ -367,10 +379,31 @@ export default function App() {
     }
   };
 
+  // Manual turn-taking controls
+  const handleDoneSpeaking = () => {
+    setIsUserTurn(false);
+    setTutorState('thinking');
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'activity_end' }));
+    }
+  };
+
+  const handleStartSpeaking = () => {
+    setIsUserTurn(true);
+    setTutorState('listening');
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.stopAll();
+    }
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'activity_start' }));
+    }
+  };
+
   // End Session & Generate Comprehensive Report
   const endSession = async () => {
     const finalTranscript = [...transcript];
     const finalCorrections = [...corrections];
+    const finalNativeUpgrades = [...nativeUpgrades];
     const finalDuration = sessionDuration;
     const finalSettings = { ...settings };
 
@@ -401,6 +434,7 @@ export default function App() {
         body: JSON.stringify({
           transcript: finalTranscript,
           corrections: finalCorrections,
+          nativeUpgrades: finalNativeUpgrades,
           settings: finalSettings,
           stats: {
             durationSeconds: finalDuration,
@@ -452,6 +486,12 @@ export default function App() {
           pattern: `${c.category.toUpperCase()} structure`,
           example: c.original,
           explanation: c.explanation,
+        })),
+        nativePhrases: finalNativeUpgrades.map((u) => ({
+          original: u.original,
+          nativeVersion: u.native_version,
+          register: u.register,
+          explanation: u.why_it_sounds_more_native,
         })),
         vocabulary: [
           {
@@ -533,12 +573,16 @@ export default function App() {
             tutorState={tutorState}
             transcript={transcript}
             corrections={corrections}
+            nativeUpgrades={nativeUpgrades}
             settings={settings}
             userAnalyser={userAnalyser}
             tutorAnalyser={tutorAnalyser}
             isMicMuted={isMicMuted}
             onToggleMicMute={() => setIsMicMuted((prev) => !prev)}
             onEndSession={endSession}
+            isUserTurn={isUserTurn}
+            onDoneSpeaking={handleDoneSpeaking}
+            onStartSpeaking={handleStartSpeaking}
           />
         ) : (
           <LobbyView

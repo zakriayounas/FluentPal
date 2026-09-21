@@ -113,25 +113,41 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
         )}
 
         {/* Active Session Configuration Preview Bar */}
-        <div className="w-full max-w-2xl pt-4 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-3 text-left">
-          <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
+        <div className="w-full max-w-3xl pt-4 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-left">
+          <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Language</span>
-            <span className="text-sm font-semibold text-white truncate block">{settings.targetLanguage}</span>
+            <span className="text-xs font-semibold text-white truncate block">{settings.targetLanguage}</span>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
+          <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Level</span>
-            <span className="text-sm font-semibold text-white truncate block">{settings.level.split(' ')[0]}</span>
+            <span className="text-xs font-semibold text-white truncate block">{settings.level.split(' ')[0]}</span>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
+          <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Turn-Taking</span>
+            <span className="text-xs font-semibold text-emerald-300 truncate block">
+              {settings.turnTakingMode === 'manual' ? 'Manual (Space)' : 'Auto VAD'}
+            </span>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Patience</span>
+            <span className="text-xs font-semibold text-indigo-300 truncate block">
+              {settings.turnTakingMode === 'manual' ? 'Push-to-Talk' : settings.pausePatience || 'Patient'}
+            </span>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Native Upgrade</span>
+            <span className="text-xs font-semibold text-amber-300 truncate block">
+              {settings.nativeUpgrade || 'When useful'}
+            </span>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Voice & Speed</span>
-            <span className="text-sm font-semibold text-white truncate block">{settings.tutorVoice} • {settings.speed}</span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Mode</span>
-            <span className="text-sm font-semibold text-white truncate block">{settings.mode.split(' ')[0]}</span>
+            <span className="text-xs font-semibold text-white truncate block">{settings.tutorVoice} • {settings.speed}</span>
           </div>
         </div>
 

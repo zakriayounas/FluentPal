@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Mic,
   MicOff,
@@ -10,41 +10,87 @@ import {
   CheckCircle2,
   AlertCircle,
   HelpCircle,
+  Clock,
+  Radio,
+  Check,
 } from 'lucide-react';
-import { TutorState, TranscriptMessage, Correction, TargetLanguage, SessionSettings } from '../types';
+import {
+  TutorState,
+  TranscriptMessage,
+  Correction,
+  TargetLanguage,
+  SessionSettings,
+  NativeUpgrade,
+} from '../types';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import { CorrectionCard } from './CorrectionCard';
+import { NativeUpgradeCard } from './NativeUpgradeCard';
 
 interface LiveSessionViewProps {
   tutorState: TutorState;
   transcript: TranscriptMessage[];
   corrections: Correction[];
+  nativeUpgrades?: NativeUpgrade[];
   settings: SessionSettings;
   userAnalyser: AnalyserNode | null;
   tutorAnalyser: AnalyserNode | null;
   isMicMuted: boolean;
   onToggleMicMute: () => void;
   onEndSession: () => void;
+  isUserTurn?: boolean;
+  onDoneSpeaking?: () => void;
+  onStartSpeaking?: () => void;
 }
 
 export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
   tutorState,
   transcript,
   corrections,
+  nativeUpgrades = [],
   settings,
   userAnalyser,
   tutorAnalyser,
   isMicMuted,
   onToggleMicMute,
   onEndSession,
+  isUserTurn = true,
+  onDoneSpeaking,
+  onStartSpeaking,
 }) => {
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [feedbackTab, setFeedbackTab] = useState<'all' | 'upgrades' | 'corrections'>('all');
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcript]);
+
+  // Spacebar shortcut in manual turn-taking mode
+  useEffect(() => {
+    if (settings.turnTakingMode !== 'manual') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.repeat
+      ) {
+        return;
+      }
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (isUserTurn) {
+          onDoneSpeaking?.();
+        } else {
+          onStartSpeaking?.();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [settings.turnTakingMode, isUserTurn, onDoneSpeaking, onStartSpeaking]);
 
   const getStateMeta = () => {
     switch (tutorState) {
@@ -90,6 +136,20 @@ export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
   const stateMeta = getStateMeta();
   const StateIcon = stateMeta.icon;
 
+  const totalFeedbackCount = corrections.length + nativeUpgrades.length;
+
+  const getPatienceSecondsLabel = () => {
+    switch (settings.pausePatience) {
+      case 'Normal':
+        return '~1.2s';
+      case 'Very patient':
+        return '~4.0s';
+      case 'Patient':
+      default:
+        return '~2.5s';
+    }
+  };
+
   return (
     <div id="live-session-view" className="w-full flex-1 flex flex-col max-w-7xl mx-auto px-3 sm:px-6 py-4 gap-4">
       {/* Top Banner: Headphone Tip & Live Status */}
@@ -100,8 +160,29 @@ export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
           <span>Tip: Use headphones for best results, to avoid microphone echo.</span>
         </div>
 
-        {/* State Indicator Pill */}
-        <div className="flex items-center gap-2">
+        {/* State Indicator & Turn-Taking Pill */}
+        <div className="flex items-center flex-wrap gap-2">
+          {/* Turn Taking Indicator */}
+          {settings.turnTakingMode === 'manual' ? (
+            <div
+              id="manual-mode-indicator"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
+            >
+              <Mic className="w-3 h-3 text-indigo-400" />
+              <span>Manual Turn-Taking (Spacebar)</span>
+            </div>
+          ) : (
+            <div
+              id="auto-patience-indicator"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+              title="Automatic Voice Activity Detection silence threshold"
+            >
+              <Clock className="w-3 h-3 text-emerald-400" />
+              <span>Patience: {settings.pausePatience || 'Patient'} ({getPatienceSecondsLabel()})</span>
+            </div>
+          )}
+
+          {/* State Indicator Pill */}
           <div
             id="tutor-state-indicator"
             className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-semibold ${stateMeta.badgeClass} shadow-sm transition-all duration-300`}
@@ -111,7 +192,7 @@ export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
             <span>{stateMeta.title}</span>
           </div>
 
-          <span className="hidden md:inline text-[11px] text-slate-400 italic">
+          <span className="hidden xl:inline text-[11px] text-slate-400 italic">
             Interrupt Sam anytime (Barge-in active)
           </span>
         </div>
@@ -138,7 +219,7 @@ export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
           <div
             id="transcript-scroll-area"
             ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 max-h-[500px]"
+            className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 max-h-[440px]"
           >
             {transcript.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
@@ -184,6 +265,57 @@ export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
             <div ref={transcriptEndRef} />
           </div>
 
+          {/* Manual Turn-Taking Action Banner */}
+          {settings.turnTakingMode === 'manual' && (
+            <div className="px-4 py-3 border-t border-slate-800 bg-slate-900/90">
+              {isUserTurn ? (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-300 block">
+                        Your Turn to Speak
+                      </span>
+                      <span className="text-[11px] text-slate-300 hidden sm:inline">
+                        Microphone is streaming. Click when finished or press Spacebar.
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    id="manual-done-speaking-btn"
+                    onClick={onDoneSpeaking}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/25 active:scale-95 transition-all shrink-0"
+                  >
+                    <CornerDownLeft className="w-4 h-4" />
+                    <span>Done Speaking (Space)</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-indigo-500/15 border border-indigo-500/30">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-indigo-400 animate-pulse" />
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-300 block">
+                        Sam is {tutorState === 'thinking' ? 'Thinking...' : 'Speaking...'}
+                      </span>
+                      <span className="text-[11px] text-slate-400 hidden sm:inline">
+                        Wait for tutor or click to take turn immediately.
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    id="manual-start-speaking-btn"
+                    onClick={onStartSpeaking}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold active:scale-95 transition-all shrink-0"
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    <span>Take Turn (Space)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Bottom Control Bar */}
           <div className="p-3.5 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -207,57 +339,113 @@ export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 active:scale-98 transition-all shadow-lg shadow-rose-600/20"
             >
               <Square className="w-3.5 h-3.5 fill-current" />
-              <span>End Session & View Report</span>
+              <span>End Session &amp; View Report</span>
             </button>
           </div>
         </div>
 
-        {/* Right 5 Columns: Real-Time Corrections Panel */}
+        {/* Right 5 Columns: Real-Time Feedback Panel (Corrections & Native Upgrades) */}
         <div className="lg:col-span-5 flex flex-col rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-md overflow-hidden shadow-xl">
-          {/* Corrections Header */}
-          <div className="px-5 py-4 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <h3 className="text-sm font-bold text-white tracking-tight">Live Corrections & Recasts</h3>
+          {/* Header & Tabs */}
+          <div className="border-b border-slate-800 bg-slate-950/50 p-3">
+            <div className="flex items-center justify-between mb-2.5 px-1">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <h3 className="text-sm font-bold text-white tracking-tight">Live Feedback &amp; Upgrades</h3>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                {totalFeedbackCount} logged
+              </span>
             </div>
-            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-              {corrections.length} {corrections.length === 1 ? 'logged' : 'logged'}
-            </span>
+
+            {/* Filter Tabs */}
+            <div className="flex gap-1.5 p-1 bg-slate-900/90 rounded-xl border border-slate-800 text-xs font-medium">
+              <button
+                id="feedback-tab-all"
+                type="button"
+                onClick={() => setFeedbackTab('all')}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-center transition-colors ${
+                  feedbackTab === 'all'
+                    ? 'bg-indigo-600 text-white font-semibold shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                All ({totalFeedbackCount})
+              </button>
+              <button
+                id="feedback-tab-upgrades"
+                type="button"
+                onClick={() => setFeedbackTab('upgrades')}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-center transition-colors ${
+                  feedbackTab === 'upgrades'
+                    ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 shadow-sm'
+                    : 'text-slate-400 hover:text-amber-300'
+                }`}
+              >
+                Native ({nativeUpgrades.length})
+              </button>
+              <button
+                id="feedback-tab-corrections"
+                type="button"
+                onClick={() => setFeedbackTab('corrections')}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-center transition-colors ${
+                  feedbackTab === 'corrections'
+                    ? 'bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 shadow-sm'
+                    : 'text-slate-400 hover:text-indigo-300'
+                }`}
+              >
+                Recasts ({corrections.length})
+              </button>
+            </div>
           </div>
 
-          {/* Corrections Feed */}
+          {/* Feedback Feed */}
           <div
             id="corrections-feed"
             className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[560px]"
           >
-            {corrections.length === 0 ? (
+            {totalFeedbackCount === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-sm font-semibold text-white">No mistakes logged yet</h4>
+                  <h4 className="text-sm font-semibold text-white">No items logged yet</h4>
                   <p className="text-xs text-slate-400 max-w-xs">
-                    Whenever Sam notices grammar, vocabulary, or pronunciation errors, native recasting cards will appear here.
+                    As you speak, Sam will provide &ldquo;Say it like a native&rdquo; phrasing upgrades and gentle recasting cards here.
                   </p>
                 </div>
               </div>
             ) : (
-              corrections.map((corr) => (
-                <CorrectionCard
-                  key={corr.id}
-                  correction={corr}
-                  targetLanguage={settings.targetLanguage}
-                />
-              ))
+              <>
+                {/* Native Upgrades if in All or Upgrades tab */}
+                {(feedbackTab === 'all' || feedbackTab === 'upgrades') &&
+                  nativeUpgrades.map((upgrade) => (
+                    <NativeUpgradeCard
+                      key={`upgrade-${upgrade.id}`}
+                      upgrade={upgrade}
+                      targetLanguage={settings.targetLanguage}
+                    />
+                  ))}
+
+                {/* Corrections if in All or Corrections tab */}
+                {(feedbackTab === 'all' || feedbackTab === 'corrections') &&
+                  corrections.map((corr) => (
+                    <CorrectionCard
+                      key={`corr-${corr.id}`}
+                      correction={corr}
+                      targetLanguage={settings.targetLanguage}
+                    />
+                  ))}
+              </>
             )}
           </div>
 
-          {/* Recasting Philosophy Tip */}
+          {/* Recasting & Upgrade Philosophy Tip */}
           <div className="p-3 border-t border-slate-800 bg-slate-950/40 flex items-center gap-2 text-[11px] text-slate-400">
             <HelpCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
             <span>
-              Sam uses native recasting to repeat your thoughts naturally without disrupting conversational flow.
+              Sam gently suggests authentic native phrasing and recasts without disrupting conversational flow.
             </span>
           </div>
         </div>
