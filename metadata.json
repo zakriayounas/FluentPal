@@ -1,0 +1,6 @@
+{
+  "name": "FluentPal",
+  "description": "Real-time AI voice language-practice partner with live spoken conversation, recasting feedback, and CEFR session reports.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
