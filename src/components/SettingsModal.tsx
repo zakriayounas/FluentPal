@@ -12,6 +12,7 @@ import {
   Mic,
   ArrowRight,
   ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import {
   SessionSettings,
@@ -85,9 +86,10 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   tutorVoice: 'Zephyr',
   accentPreference: 'American',
   topic: '',
-  pausePatience: 'Patient',
+  pausePatience: 'Natural',
   turnTakingMode: 'auto',
   nativeUpgrade: 'When useful',
+  showLatencyMeter: true,
 };
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -376,23 +378,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   How long Sam waits in silence before concluding your turn is finished. Tuned directly in the Live API voice activity detector.
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {(
                     [
                       {
-                        patience: 'Normal' as PausePatience,
-                        label: 'Normal (~1.2s)',
-                        desc: 'Brisk, fast-paced conversational tempo.',
+                        patience: 'Quick' as PausePatience,
+                        label: 'Quick (~700ms)',
+                        desc: 'Fast, brisk responses with minimal pause.',
+                      },
+                      {
+                        patience: 'Natural' as PausePatience,
+                        label: 'Natural (~1200ms)',
+                        desc: 'Default. Feels like a real, comfortable chat.',
                       },
                       {
                         patience: 'Patient' as PausePatience,
-                        label: 'Patient (~2.5s)',
-                        desc: 'Default. Ample breathing room to think mid-sentence.',
+                        label: 'Patient (~1800ms)',
+                        desc: 'Extra breathing room to think mid-sentence.',
                       },
                       {
                         patience: 'Very patient' as PausePatience,
-                        label: 'Very patient (~4.0s)',
-                        desc: 'Extended silence window for complex formulation.',
+                        label: 'Very patient (~2500ms)',
+                        desc: 'Extended silence window for complex thought.',
                       },
                     ]
                   ).map((p) => (
@@ -407,15 +414,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           : 'border-slate-800 bg-slate-800/50 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
                       }`}
                     >
-                      <div className="font-semibold text-sm flex items-center justify-between">
+                      <div className="font-semibold text-xs sm:text-sm flex items-center justify-between">
                         <span>{p.label}</span>
                         {formData.pausePatience === p.patience && (
-                          <Check className="w-3.5 h-3.5 text-indigo-400" />
+                          <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0 ml-1" />
                         )}
                       </div>
-                      <p className="text-xs text-slate-400 mt-1">{p.desc}</p>
+                      <p className="text-[11px] text-slate-400 mt-1 leading-normal">{p.desc}</p>
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Developer Latency Indicator Toggle */}
+              <div className="pt-3 border-t border-slate-800/80">
+                <div className="flex items-center justify-between gap-4 p-3.5 rounded-xl bg-slate-950/40 border border-slate-800/80">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+                      <Zap className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <label htmlFor="toggle-latency-meter" className="text-sm font-semibold text-white block cursor-pointer">
+                        Developer Latency Indicator
+                      </label>
+                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                        Measures and displays real-time response latency (ms from your silence threshold ending until the first tutor audio chunk arrives; target &lt; 1.5s).
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    id="toggle-latency-meter"
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        showLatencyMeter: formData.showLatencyMeter === false ? true : false,
+                      })
+                    }
+                    className={`w-12 h-6 rounded-full transition-colors relative p-0.5 shrink-0 focus:outline-none ${
+                      formData.showLatencyMeter !== false ? 'bg-indigo-600' : 'bg-slate-700'
+                    }`}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                        formData.showLatencyMeter !== false ? 'translate-x-6' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
                 </div>
               </div>
 

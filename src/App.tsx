@@ -17,10 +17,9 @@ import { ReportModal } from './components/ReportModal';
 import { HistoryModal } from './components/HistoryModal';
 import {
   LiveAudioPlayer,
-  downsampleAndConvertToPcm16,
-  pcm16ToBase64,
+  createMicCaptureNode,
   base64Pcm16ToFloat32,
-  calculateRms,
+  MicCaptureNode,
 } from './utils/audio';
 import { AlertTriangle, RefreshCw, X } from 'lucide-react';
 
@@ -62,6 +61,27 @@ export default function App() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [sessionDuration, setSessionDuration] = useState(0);
 
+  // Developer Latency Tracking (ms from user silence end to first tutor audio)
+  const [latencyStats, setLatencyStats] = useState<{
+    lastMs: number | null;
+    avgMs: number | null;
+    minMs: number | null;
+    maxMs: number | null;
+    history: number[];
+  }>({
+    lastMs: null,
+    avgMs: null,
+    minMs: null,
+    maxMs: null,
+    history: [],
+  });
+
+  const userSpeechEndedAtRef = useRef<number | null>(null);
+  const tutorStateRef = useRef<TutorState>('idle');
+  useEffect(() => {
+    tutorStateRef.current = tutorState;
+  }, [tutorState]);
+
   // Live Transcripts, Corrections, and Native Upgrades
   const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
   const [corrections, setCorrections] = useState<Correction[]>([]);
@@ -92,7 +112,7 @@ export default function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
-  const scriptNodeRef = useRef<ScriptProcessorNode | null>(null);
+  const micCaptureRef = useRef<MicCaptureNode | null>(null);
   const audioPlayerRef = useRef<LiveAudioPlayer | null>(null);
   const sessionTimerRef = useRef<number | null>(null);
   const isMicMutedRef = useRef(false);
@@ -132,12 +152,12 @@ export default function App() {
 
   // Clean up all audio and websocket resources
   const cleanupSession = useCallback(() => {
-    // 1. Close ScriptProcessor
-    if (scriptNodeRef.current) {
+    // 1. Close Microphone Capture Node
+    if (micCaptureRef.current) {
       try {
-        scriptNodeRef.current.disconnect();
+        micCaptureRef.current.disconnect();
       } catch {}
-      scriptNodeRef.current = null;
+      micCaptureRef.current = null;
     }
 
     // 2. Stop mic stream tracks
@@ -256,9 +276,33 @@ export default function App() {
             setIsStarting(false);
             setIsSessionActive(true);
             setTutorState('listening');
+          } else if (msg.type === 'user_turn_ended') {
+            // Signal from server that user's turn ended (VAD silence threshold reached)
+            userSpeechEndedAtRef.current = msg.timestamp || Date.now();
           } else if (msg.type === 'audio') {
             // Incoming 24kHz PCM chunk from Sam
             if (msg.data && audioPlayerRef.current) {
+              // Measure round-trip tutor latency (from silence ending to first tutor audio)
+              if (userSpeechEndedAtRef.current && tutorStateRef.current !== 'speaking') {
+                const delta = Date.now() - userSpeechEndedAtRef.current;
+                userSpeechEndedAtRef.current = null;
+                if (delta > 50 && delta < 15000) {
+                  setLatencyStats((prev) => {
+                    const history = [...prev.history, delta].slice(-20);
+                    const avg = Math.round(history.reduce((a, b) => a + b, 0) / history.length);
+                    const min = Math.min(...history);
+                    const max = Math.max(...history);
+                    return {
+                      lastMs: delta,
+                      avgMs: avg,
+                      minMs: min,
+                      maxMs: max,
+                      history,
+                    };
+                  });
+                }
+              }
+
               const float32Samples = base64Pcm16ToFloat32(msg.data);
               audioPlayerRef.current.playChunk(float32Samples, 24000);
               setTutorState('speaking');
@@ -266,6 +310,10 @@ export default function App() {
           } else if (msg.type === 'transcription') {
             const { speaker, text, finished } = msg;
             if (!text) return;
+
+            if (speaker === 'user' && finished && !userSpeechEndedAtRef.current) {
+              userSpeechEndedAtRef.current = Date.now();
+            }
 
             setTranscript((prev) => {
               const lastMsg = prev[prev.length - 1];
@@ -299,6 +347,7 @@ export default function App() {
             }
           } else if (msg.type === 'interrupted') {
             console.log('[App] Barge-in interrupted Sam');
+            userSpeechEndedAtRef.current = null;
             // Immediately stop Sam's speech
             if (audioPlayerRef.current) {
               audioPlayerRef.current.stopAll();
@@ -334,26 +383,15 @@ export default function App() {
         setConnectionStatus('disconnected');
       };
 
-      // 5. Setup ScriptProcessor to stream microphone samples to WebSocket
-      // Buffer size 4096 gives ~85ms chunks at 48kHz / ~256ms at 16kHz
-      const scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
-      scriptNodeRef.current = scriptNode;
-
-      scriptNode.onaudioprocess = (audioProcessingEvent) => {
+      // 5. Setup low-latency AudioWorklet microphone capture (stream small 20-40ms chunks immediately)
+      const micCapture = await createMicCaptureNode(audioCtx, source, (base64, rms) => {
         if (isMicMutedRef.current) return;
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
-        const inputBuffer = audioProcessingEvent.inputBuffer.getChannelData(0);
-        const rms = calculateRms(inputBuffer);
-
-        // If user speaks loudly and tutor is speaking, signal user listening
+        // If user speaks and tutor is speaking, register user activity
         if (rms > 0.08) {
           setTutorState((curr) => (curr === 'speaking' ? 'listening' : curr));
         }
-
-        // Downsample input to 16,000 Hz 16-bit PCM
-        const pcm16 = downsampleAndConvertToPcm16(inputBuffer, audioCtx.sampleRate, 16000);
-        const base64 = pcm16ToBase64(pcm16);
 
         wsRef.current.send(
           JSON.stringify({
@@ -361,10 +399,8 @@ export default function App() {
             data: base64,
           })
         );
-      };
-
-      source.connect(scriptNode);
-      scriptNode.connect(audioCtx.destination);
+      });
+      micCaptureRef.current = micCapture;
     } catch (err: any) {
       console.error('[App] Failed to start conversation:', err);
       setIsStarting(false);
@@ -381,6 +417,7 @@ export default function App() {
 
   // Manual turn-taking controls
   const handleDoneSpeaking = () => {
+    userSpeechEndedAtRef.current = Date.now();
     setIsUserTurn(false);
     setTutorState('thinking');
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -583,6 +620,7 @@ export default function App() {
             isUserTurn={isUserTurn}
             onDoneSpeaking={handleDoneSpeaking}
             onStartSpeaking={handleStartSpeaking}
+            latencyStats={latencyStats}
           />
         ) : (
           <LobbyView

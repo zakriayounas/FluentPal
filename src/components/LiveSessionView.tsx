@@ -13,6 +13,7 @@ import {
   Clock,
   Radio,
   Check,
+  Zap,
 } from 'lucide-react';
 import {
   TutorState,
@@ -25,6 +26,13 @@ import {
 import { WaveformVisualizer } from './WaveformVisualizer';
 import { CorrectionCard } from './CorrectionCard';
 import { NativeUpgradeCard } from './NativeUpgradeCard';
+
+export interface LatencyStats {
+  lastMs: number | null;
+  avgMs: number | null;
+  minMs: number | null;
+  maxMs: number | null;
+}
 
 interface LiveSessionViewProps {
   tutorState: TutorState;
@@ -40,6 +48,7 @@ interface LiveSessionViewProps {
   isUserTurn?: boolean;
   onDoneSpeaking?: () => void;
   onStartSpeaking?: () => void;
+  latencyStats?: LatencyStats;
 }
 
 export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
@@ -56,6 +65,7 @@ export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
   isUserTurn = true,
   onDoneSpeaking,
   onStartSpeaking,
+  latencyStats,
 }) => {
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -140,13 +150,15 @@ export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
 
   const getPatienceSecondsLabel = () => {
     switch (settings.pausePatience) {
-      case 'Normal':
-        return '~1.2s';
-      case 'Very patient':
-        return '~4.0s';
+      case 'Quick':
+        return '~700ms';
       case 'Patient':
+        return '~1800ms';
+      case 'Very patient':
+        return '~2500ms';
+      case 'Natural':
       default:
-        return '~2.5s';
+        return '~1200ms';
     }
   };
 
@@ -160,8 +172,54 @@ export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
           <span>Tip: Use headphones for best results, to avoid microphone echo.</span>
         </div>
 
-        {/* State Indicator & Turn-Taking Pill */}
+        {/* State Indicator & Turn-Taking Pill & Latency Meter */}
         <div className="flex items-center flex-wrap gap-2">
+          {/* Developer Latency Meter Badge (if enabled) */}
+          {settings.showLatencyMeter !== false && (
+            <div
+              id="developer-latency-indicator"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold bg-slate-800/90 border-slate-700 text-slate-200 shadow-sm"
+              title="Time from your silence threshold ending until Sam's first audio chunk begins playing. Target: under 1.5s."
+            >
+              <Zap
+                className={`w-3.5 h-3.5 ${
+                  !latencyStats?.lastMs
+                    ? 'text-slate-400'
+                    : latencyStats.lastMs <= 1500
+                    ? 'text-emerald-400'
+                    : latencyStats.lastMs <= 2200
+                    ? 'text-amber-400'
+                    : 'text-rose-400'
+                }`}
+              />
+              <span>
+                {latencyStats?.lastMs ? (
+                  <>
+                    <span className="text-slate-400 font-normal">Latency: </span>
+                    <strong
+                      className={
+                        latencyStats.lastMs <= 1500
+                          ? 'text-emerald-300 font-mono'
+                          : latencyStats.lastMs <= 2200
+                          ? 'text-amber-300 font-mono'
+                          : 'text-rose-300 font-mono'
+                      }
+                    >
+                      {latencyStats.lastMs}ms
+                    </strong>
+                    <span className="text-slate-400 text-[10px] ml-1 font-mono">
+                      (avg {latencyStats.avgMs}ms • target &lt;1.5s)
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-slate-400 font-normal">
+                    Latency: <span className="text-slate-300 italic">ready</span>
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+
           {/* Turn Taking Indicator */}
           {settings.turnTakingMode === 'manual' ? (
             <div
@@ -178,7 +236,7 @@ export const LiveSessionView: React.FC<LiveSessionViewProps> = ({
               title="Automatic Voice Activity Detection silence threshold"
             >
               <Clock className="w-3 h-3 text-emerald-400" />
-              <span>Patience: {settings.pausePatience || 'Patient'} ({getPatienceSecondsLabel()})</span>
+              <span>Patience: {settings.pausePatience || 'Natural'} ({getPatienceSecondsLabel()})</span>
             </div>
           )}
 

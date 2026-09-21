@@ -97,8 +97,6 @@ function buildSystemInstruction(settings: any, previousContext?: string): string
     !settings?.explanationLanguage || settings.explanationLanguage === 'Same as target language'
       ? targetLanguage
       : settings.explanationLanguage;
-  const strictness = settings?.strictness || 'Balanced';
-  const timing = settings?.timing || 'Instant (right after I finish speaking)';
   let mode = settings?.mode || 'Free conversation';
   if (mode === 'Roleplay scenario' && settings?.roleplayScenario) {
     if (settings.roleplayScenario === 'Custom scenario' && settings.customScenario) {
@@ -108,74 +106,144 @@ function buildSystemInstruction(settings: any, previousContext?: string): string
     }
   }
   const speed = settings?.speed || 'Normal';
-  const accent = targetLanguage === 'English' ? settings?.accentPreference || 'neutral' : 'standard native';
+  const accent = targetLanguage === 'English' ? settings?.accentPreference || 'American' : 'standard native';
   const topic = settings?.topic ? settings.topic : 'General everyday life, hobbies, and interests';
   const nativeUpgradeSetting = settings?.nativeUpgrade || 'When useful';
 
-  let prompt = `You are Sam, a warm, patient, and encouraging native-speaker language partner. The user is practicing ${targetLanguage} at ${level} level. Explain things in ${explanationLanguage} when needed. Correction style: ${strictness}. Correction timing: ${timing}. Mode: ${mode}. Topic: ${topic}. Speaking speed: ${speed}. Accent: ${accent}.
+  let prompt = `You are Sam, a friendly, relaxed native speaker who enjoys chatting. You are NOT a robotic tutor or a quiz machine. Sound like a real person on a call with a friend who is learning your language.
 
-PATIENT TURN-TAKING & PACING:
-- If I pause, hesitate, say filler words (um, uh, hmm, like), or trail off, do NOT jump in. Wait patiently, because I am thinking. Only respond when I have clearly finished my thought. Do not finish my sentences for me. Speak at a calm, unhurried pace and leave a natural beat before you answer.
-- If I say "wait", "give me a second", or "let me think", stay silent until I speak again.
+CURRENT PRACTICE CONTEXT:
+- Target Language: ${targetLanguage} (speak primarily in ${targetLanguage})
+- Learner's Level: ${level}
+- Explanation Language: ${explanationLanguage} (only for direct grammar or translation requests)
+- Conversation Mode: ${mode}
+- Topic: ${topic}
+- Native Upgrade Mode: ${nativeUpgradeSetting}
+- Spoken Pace: ${speed}. Accent: ${accent}
 
-CONVERSATION RULES
-1. Speak mostly in ${targetLanguage}. Match your vocabulary and sentence complexity to the user's level, and speak slightly above it so they keep learning.
-2. Keep your turns short (1-3 sentences) and end most turns with a question or prompt so the user does most of the talking. Aim for the user to speak about 70% of the time.
-3. Let the user finish speaking. Never correct mid-sentence.
-4. Always respond to the MEANING of what they said first, like a real conversation partner, and only then correct.
+SPEAKING STYLE
+- Use natural spoken language: contractions, everyday phrasing, and short sentences. Avoid stiff, textbook, or formal wording unless I ask for it.
+- Show real reactions to what I say ("Oh wow, really?", "Ha, that sounds fun", "Hmm, tough one"). React to the content first, like a person would.
+- Use fillers and backchannels sparingly and naturally ("hmm", "right", "oh nice", "yeah"). Never overdo them.
+- Vary how you start sentences and how you praise. Do not repeat "Great job!" or "Good try!" every turn. Sometimes say nothing about how I did and just continue the chat.
+- Match my energy: more relaxed if I'm relaxed, more encouraging if I sound unsure.
+- Share tiny bits about yourself or your opinions now and then so it feels like a real conversation, and keep the focus on me.
+- Never list things, never say "As an AI", and never announce what you are about to do ("Now I will correct you").
+- Keep your spoken turns short (1-3 sentences) and end most turns with an engaging conversational question so I speak 70% of the time.
 
-HOW TO CORRECT
-- Use "recasting": naturally repeat their sentence in its correct form, then briefly say why if it helps. Example: "Ah, you'd say 'I went to the market yesterday.' Nice! What did you buy?"
-- For a serious or repeated error, briefly explain the rule in one or two sentences, then ask them to say the corrected sentence once out loud.
-- Correct at most 1-2 things per turn for Beginner, 2-3 for Intermediate, and more for Advanced or Strict. Prioritize errors that block understanding, then repeated errors, then style.
-- Also point out unnatural phrasing: "That's grammatically correct, but a native speaker would usually say ..."
-- If the user's sentence was correct and natural, say so briefly to build confidence.
-- Call the \`log_correction\` tool for every correction you make. Do not read the tool call aloud.
-- Never make the user feel judged. Be encouraging and celebrate progress.`;
+FEEDBACK SHOULD FEEL LIKE A FRIEND, NOT A TEMPLATE
+- Do not use the same script every time. Work feedback into the flow, in different ways:
+  "Oh, people would usually say 'I'm running late' there. Anyway, what happened next?"
+  "Small thing: it's 'I have been here since Monday'. Sounds more natural that way. So how was the trip?"
+  "That works, but a native would probably go with '...'. Try it once?"
+- Give feedback on at most one thing per turn in casual conversation, and skip it entirely if the chat is flowing well and the mistake is minor.
+- In "When useful" mode, give a native-sounding upgrade at most every second or third turn. In "Every turn" mode, keep each upgrade to a single short sentence.
+- Keep any spoken correction or upgrade under about 8 seconds, then go straight back to the conversation with a question.
 
-  if (nativeUpgradeSetting !== 'Off') {
-    prompt += `\n\nSPOKEN "SAY IT LIKE A NATIVE" UPGRADE BEHAVIOR:
-${nativeUpgradeSetting === 'Every turn' ? 'After EVERY thing I say' : 'After I finish speaking, whenever a clearly more natural, idiomatic, or native-sounding way to say it exists'}:
-1. First respond naturally to what I said (keep the friendly conversation flowing).
-2. Then, give a spoken "Say it like a native" upgrade out loud in a concise, warm spoken rhythm:
-   - "You said: [my sentence]."
-   - "A more natural way to put it is: [native version]." Speak it clearly at normal native pace.
-   - If helpful or subtle, add one short sentence on why (e.g. "Native speakers usually say 'run into' instead of 'meet by chance' here", or mention collocations, contractions, rhythm, or register).
-   - Invite me to repeat it: "Try saying it that way."
-3. Wait for me to repeat it patiently.
-4. When I repeat it, acknowledge briefly ("Nice!", "Much better!", or a small pronunciation tweak) and continue the conversation with a question.
-
-Native Upgrade Rules:
-- Match the upgrade to my level (${level}). Beginners need accessible phrasing they can immediately reuse; intermediate/advanced learners need idioms, natural collocations, and register nuances.
-- Mention the register when relevant: "That's casual" vs. "In a formal or business setting, you'd say ...".
-- Keep the whole spoken upgrade under about 15 seconds so the conversation keeps moving.
-- If my sentence was already completely natural, say so in a few words and suggest a casual/slang alternative or move on smoothly without forcing changes.
-- If I ask "make it more native", "say it better", or "say that again slower", do this immediately for my previous sentence.
-- Silently call the \`log_native_upgrade\` tool for every native upgrade you provide. Do not read the tool call aloud.`;
-  }
-
-  prompt += `\n\nPRONUNCIATION
-- If a word sounds clearly mispronounced, say the word slowly, describe the sound in simple terms (mouth position, stressed syllable), and ask them to repeat it. Be honest that you may not catch every pronunciation issue from audio alone.
-
-MODES
-- Free conversation: pick friendly topics, follow the user's interests, ask follow-up questions.
-- Roleplay: play the role realistically (waiter, interviewer, receptionist, etc.) and stay in character. Give corrections briefly out of character, then return to the scene.
-- Pronunciation practice: give short phrases or tongue twisters at their level, have them repeat, and give feedback.
-- Debate: take a respectful opposing side to push the user to explain and justify opinions.
-
-BEGINNING AND ENDING
-- Start with a short friendly greeting and one easy opening question.
-- If the user seems stuck, offer a simple hint or two sentence-starter options instead of switching languages.
-- If the user says "translate", "explain", or "repeat", do it in ${explanationLanguage} or slower ${targetLanguage} as requested, then return to practice.
-- When the user says they want to stop, give a 2-sentence spoken wrap-up with one thing they did well and one thing to focus on.`;
+PAUSES
+- If I pause, hesitate, or say fillers, wait patiently. Never finish my sentence for me. Answer only when I have clearly finished my thought.`;
 
   if (previousContext) {
     prompt += `\n\nPREVIOUS CONVERSATION CONTEXT (to continue from earlier):
 ${previousContext}
-Greet them warmly, acknowledge where you left off, and continue seamlessly.`;
+Greet them warmly, acknowledge where you left off, and continue smoothly.`;
   }
 
   return prompt;
+}
+
+/**
+ * Fast background evaluation using a separate lightweight text model (gemini-3.8-flash)
+ * Generates JSON for correction and native-version cards without ever blocking the voice stream.
+ */
+async function evaluateTurnInBackground(
+  userText: string,
+  tutorText: string,
+  settings: any,
+  clientWs: WebSocket
+) {
+  if (!userText || userText.trim().length < 2) return;
+  try {
+    const targetLanguage = settings?.targetLanguage || 'English';
+    const level = settings?.level || 'Intermediate (B1-B2)';
+    const nativeUpgradeSetting = settings?.nativeUpgrade || 'When useful';
+    const strictness = settings?.strictness || 'Balanced';
+    const ai = getGeminiClient();
+
+    const prompt = `You are an expert language coach evaluating a single conversational turn.
+Target language: ${targetLanguage}
+Learner CEFR level: ${level}
+Correction Strictness: ${strictness}
+Native Upgrade Preference: ${nativeUpgradeSetting}
+
+User said: "${userText}"
+Tutor replied: "${tutorText}"
+
+Tasks:
+1. "correction": Check if the user made a genuine language error (grammar, preposition, vocabulary, tense, or word order).
+   - If error exists and warrants feedback for level ${level} and strictness ${strictness}: provide { "original": string, "corrected": string, "explanation": string, "category": "grammar" | "vocabulary" | "word_choice" | "pronunciation" | "fluency" | "politeness_register" }.
+   - If the sentence is fine, acceptable, or too minor, return null.
+2. "native_upgrade": If Native Upgrade Preference is NOT 'Off', check if there is an authentic, natural native phrasing (idiom, natural collocation, phrasal verb, or conversational rhythm) that sounds distinctly more natural than what the user said.
+   - If yes: provide { "original": string, "native_version": string, "why_it_sounds_more_native": string, "register": "casual" | "neutral" | "formal" }.
+   - If the user's sentence already sounds completely native and natural, return null.
+
+Respond ONLY with valid JSON in this exact structure:
+{
+  "correction": { "original": string, "corrected": string, "explanation": string, "category": string } | null,
+  "native_upgrade": { "original": string, "native_version": string, "why_it_sounds_more_native": string, "register": string } | null
+}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      },
+    });
+
+    const rawJson = response.text?.trim();
+    if (!rawJson) return;
+    const parsed = JSON.parse(rawJson);
+
+    if (parsed.correction && clientWs.readyState === WebSocket.OPEN) {
+      clientWs.send(
+        JSON.stringify({
+          type: 'correction',
+          correction: {
+            id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            original: parsed.correction.original || userText,
+            corrected: parsed.correction.corrected,
+            explanation: parsed.correction.explanation,
+            category: parsed.correction.category || 'grammar',
+            timestamp: Date.now(),
+          },
+        })
+      );
+    }
+
+    if (
+      parsed.native_upgrade &&
+      nativeUpgradeSetting !== 'Off' &&
+      clientWs.readyState === WebSocket.OPEN
+    ) {
+      clientWs.send(
+        JSON.stringify({
+          type: 'native_upgrade',
+          upgrade: {
+            id: `nu-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            original: parsed.native_upgrade.original || userText,
+            native_version: parsed.native_upgrade.native_version,
+            why_it_sounds_more_native: parsed.native_upgrade.why_it_sounds_more_native,
+            register: parsed.native_upgrade.register || 'casual',
+            timestamp: Date.now(),
+          },
+        })
+      );
+    }
+  } catch (err) {
+    console.warn('[Background Eval] Card analysis error (non-fatal, voice unaffected):', err);
+  }
 }
 
 async function startServer() {
@@ -371,13 +439,15 @@ Include:
 
           // Configure Voice Activity Detection (VAD) & Turn-Taking
           const turnTakingMode = settings?.turnTakingMode || 'auto';
-          const pausePatience = settings?.pausePatience || 'Patient';
+          const pausePatience = settings?.pausePatience || 'Natural';
 
-          let silenceDurationMs = 2500; // default Patient (~2.5s)
-          if (pausePatience === 'Normal') {
-            silenceDurationMs = 1200; // ~1.2s
+          let silenceDurationMs = 1200; // default Natural (~1.2s)
+          if (pausePatience === 'Quick') {
+            silenceDurationMs = 700; // ~700ms
+          } else if (pausePatience === 'Patient') {
+            silenceDurationMs = 1800; // ~1.8s
           } else if (pausePatience === 'Very patient') {
-            silenceDurationMs = 4000; // ~4.0s
+            silenceDurationMs = 2500; // ~2.5s
           }
 
           const realtimeInputConfig =
@@ -392,13 +462,17 @@ Include:
                     disabled: false,
                     endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
                     silenceDurationMs,
-                    prefixPaddingMs: 300,
+                    prefixPaddingMs: 200,
                   },
                 };
 
           console.log(
-            `[Live] Starting Gemini Live session (Voice: ${tutorVoice}, Mode: ${turnTakingMode}, Silence: ${silenceDurationMs}ms)`
+            `[Live] Starting Gemini Live session (Voice: ${tutorVoice}, Mode: ${turnTakingMode}, Silence: ${silenceDurationMs}ms, Affective: true, ZeroThinkingBudget)`
           );
+
+          // Track spoken utterances per turn for async background card generation
+          let turnUserUtterance = '';
+          let turnTutorUtterance = '';
 
           try {
             liveSession = await ai.live.connect({
@@ -412,11 +486,8 @@ Include:
                 },
                 systemInstruction,
                 realtimeInputConfig,
-                tools: [
-                  {
-                    functionDeclarations: [logCorrectionDeclaration, logNativeUpgradeDeclaration],
-                  },
-                ],
+                enableAffectiveDialog: true,
+                thinkingConfig: { thinkingBudget: 0 },
                 outputAudioTranscription: {},
                 inputAudioTranscription: {},
               },
@@ -444,6 +515,7 @@ Include:
                         );
                       }
                       if (part.text) {
+                        turnTutorUtterance += (turnTutorUtterance ? ' ' : '') + part.text;
                         clientWs.send(
                           JSON.stringify({
                             type: 'transcription',
@@ -459,6 +531,7 @@ Include:
                   // 2. Output Transcription
                   const outTx = message.serverContent?.outputTranscription;
                   if (outTx && outTx.text) {
+                    turnTutorUtterance += (turnTutorUtterance ? ' ' : '') + outTx.text;
                     clientWs.send(
                       JSON.stringify({
                         type: 'transcription',
@@ -469,15 +542,23 @@ Include:
                     );
                   }
 
-                  // 3. Input Transcription (final)
+                  // 3. Input Transcription (final user utterance)
                   const inTx = message.serverContent?.inputTranscription;
                   if (inTx && inTx.text) {
+                    turnUserUtterance += (turnUserUtterance ? ' ' : '') + inTx.text;
                     clientWs.send(
                       JSON.stringify({
                         type: 'transcription',
                         speaker: 'user',
                         text: inTx.text,
                         finished: true,
+                      })
+                    );
+                    // Signal user turn completed so client can start latency measurement
+                    clientWs.send(
+                      JSON.stringify({
+                        type: 'user_turn_ended',
+                        timestamp: Date.now(),
                       })
                     );
                   }
@@ -497,15 +578,25 @@ Include:
 
                   // 5. Interrupted signal (barge-in)
                   if (message.serverContent?.interrupted) {
+                    turnTutorUtterance = '';
                     clientWs.send(JSON.stringify({ type: 'interrupted' }));
                   }
 
-                  // 6. Turn Complete
+                  // 6. Turn Complete: trigger asynchronous card generation in background
                   if (message.serverContent?.turnComplete) {
                     clientWs.send(JSON.stringify({ type: 'turnComplete' }));
+
+                    if (turnUserUtterance.trim().length > 1) {
+                      const userTextToEval = turnUserUtterance.trim();
+                      const tutorTextToEval = turnTutorUtterance.trim();
+                      turnUserUtterance = '';
+                      turnTutorUtterance = '';
+                      // Evaluates completely off the audio loop without blocking tutor speech
+                      evaluateTurnInBackground(userTextToEval, tutorTextToEval, settings, clientWs);
+                    }
                   }
 
-                  // 7. Tool Calls: log_correction and log_native_upgrade
+                  // 7. Tool Calls: log_correction and log_native_upgrade (fallback compatibility)
                   if (message.toolCall?.functionCalls) {
                     for (const call of message.toolCall.functionCalls) {
                       if (call.name === 'log_correction' && call.args) {
@@ -527,7 +618,6 @@ Include:
                           })
                         );
 
-                        // Respond to the tool call so Gemini session continues smoothly
                         try {
                           liveSession?.sendToolResponse({
                             functionResponses: [
@@ -561,7 +651,6 @@ Include:
                           })
                         );
 
-                        // Respond to the tool call so Gemini session continues smoothly
                         try {
                           liveSession?.sendToolResponse({
                             functionResponses: [

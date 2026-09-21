@@ -134,7 +134,7 @@ export const LobbyView: React.FC<LobbyViewProps> = ({
           <div className="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Patience</span>
             <span className="text-xs font-semibold text-indigo-300 truncate block">
-              {settings.turnTakingMode === 'manual' ? 'Push-to-Talk' : settings.pausePatience || 'Patient'}
+              {settings.turnTakingMode === 'manual' ? 'Push-to-Talk' : settings.pausePatience || 'Natural'}
             </span>
           </div>
 

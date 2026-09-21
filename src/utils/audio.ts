@@ -95,6 +95,119 @@ export function calculateRms(buffer: Float32Array): number {
 }
 
 /**
+ * Inline AudioWorklet processor code for ultra-low latency microphone capture
+ * Buffers ~20-30ms chunks and posts them immediately off the main thread.
+ */
+const MIC_CAPTURE_WORKLET_CODE = `
+class MicCaptureProcessor extends AudioWorkletProcessor {
+  constructor(options) {
+    super();
+    const sampleRate = options?.processorOptions?.sampleRate || 16000;
+    // Target ~25ms chunks: 400 samples at 16kHz, 1200 samples at 48kHz
+    this.chunkSize = Math.max(256, Math.round((sampleRate * 25) / 1000));
+    this.buffer = new Float32Array(this.chunkSize);
+    this.offset = 0;
+  }
+
+  process(inputs) {
+    const input = inputs[0];
+    if (!input || !input[0]) return true;
+    const channel = input[0];
+
+    for (let i = 0; i < channel.length; i++) {
+      this.buffer[this.offset++] = channel[i];
+      if (this.offset >= this.chunkSize) {
+        // Post copy of raw chunk to main thread
+        this.port.postMessage(this.buffer.slice(0, this.chunkSize));
+        this.offset = 0;
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('mic-capture-processor', MicCaptureProcessor);
+`;
+
+export interface MicCaptureNode {
+  disconnect: () => void;
+}
+
+/**
+ * Creates low-latency microphone capture node using AudioWorklet (20-30ms chunks),
+ * with seamless fallback to ScriptProcessor if AudioWorklet is not permitted in the context.
+ */
+export async function createMicCaptureNode(
+  audioCtx: AudioContext,
+  source: MediaStreamAudioSourceNode,
+  onAudioChunk: (pcm16Base64: string, rms: number) => void
+): Promise<MicCaptureNode> {
+  // Try AudioWorklet first for off-main-thread processing and 20-30ms chunking
+  if (audioCtx.audioWorklet) {
+    try {
+      const blob = new Blob([MIC_CAPTURE_WORKLET_CODE], { type: 'application/javascript' });
+      const workletUrl = URL.createObjectURL(blob);
+      await audioCtx.audioWorklet.addModule(workletUrl);
+      URL.revokeObjectURL(workletUrl);
+
+      const workletNode = new AudioWorkletNode(audioCtx, 'mic-capture-processor', {
+        processorOptions: { sampleRate: audioCtx.sampleRate },
+      });
+
+      workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
+        const float32Data = event.data;
+        if (!float32Data || float32Data.length === 0) return;
+        const rms = calculateRms(float32Data);
+        const pcm16 = downsampleAndConvertToPcm16(float32Data, audioCtx.sampleRate, 16000);
+        const base64 = pcm16ToBase64(pcm16);
+        onAudioChunk(base64, rms);
+      };
+
+      source.connect(workletNode);
+      // Dummy gain node (0 gain) to keep the AudioWorklet clock running without echo
+      const dummyGain = audioCtx.createGain();
+      dummyGain.gain.value = 0;
+      workletNode.connect(dummyGain);
+      dummyGain.connect(audioCtx.destination);
+
+      return {
+        disconnect: () => {
+          try {
+            source.disconnect(workletNode);
+            workletNode.disconnect();
+            dummyGain.disconnect();
+          } catch {}
+        },
+      };
+    } catch (err) {
+      console.warn('[Audio] AudioWorklet not available or blocked, falling back to low-buffer processor:', err);
+    }
+  }
+
+  // Graceful fallback: ScriptProcessor with small buffer size (512 samples at 16kHz = 32ms; 1024 at 48kHz = 21ms)
+  const bufferSize = audioCtx.sampleRate <= 24000 ? 512 : 1024;
+  const scriptNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+  scriptNode.onaudioprocess = (e) => {
+    const input = e.inputBuffer.getChannelData(0);
+    const rms = calculateRms(input);
+    const pcm16 = downsampleAndConvertToPcm16(input, audioCtx.sampleRate, 16000);
+    const base64 = pcm16ToBase64(pcm16);
+    onAudioChunk(base64, rms);
+  };
+
+  source.connect(scriptNode);
+  scriptNode.connect(audioCtx.destination);
+
+  return {
+    disconnect: () => {
+      try {
+        source.disconnect(scriptNode);
+        scriptNode.disconnect();
+      } catch {}
+    },
+  };
+}
+
+/**
  * Gapless audio player for incoming 24kHz PCM chunks from Gemini Live
  */
 export class LiveAudioPlayer {
@@ -106,7 +219,9 @@ export class LiveAudioPlayer {
 
   public init(): AudioContext {
     if (!this.audioCtx || this.audioCtx.state === 'closed') {
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.audioCtx = new AudioContextClass({ sampleRate: 24000 });
       this.analyser = this.audioCtx.createAnalyser();
       this.analyser.fftSize = 128;
@@ -143,9 +258,10 @@ export class LiveAudioPlayer {
     }
 
     const currentTime = ctx.currentTime;
-    // Small buffer delay to avoid underruns
+    // Small playback buffer (120ms) when starting from silence to avoid crackling,
+    // while never waiting for the full response and streaming immediately.
     if (this.nextStartTime < currentTime) {
-      this.nextStartTime = currentTime + 0.035;
+      this.nextStartTime = currentTime + 0.12;
     }
 
     source.start(this.nextStartTime);
@@ -162,6 +278,7 @@ export class LiveAudioPlayer {
 
   /**
    * Stop immediately (Barge-in / Interruption)
+   * Cancels all active playing sources and resets schedule clock
    */
   public stopAll() {
     for (const src of this.activeSources) {

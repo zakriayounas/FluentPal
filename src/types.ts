@@ -47,7 +47,7 @@ export type TutorVoice = 'Zephyr' | 'Puck' | 'Kore' | 'Fenrir' | 'Charon';
 
 export type EnglishAccent = 'American' | 'British' | 'Australian' | 'Neutral';
 
-export type PausePatience = 'Normal' | 'Patient' | 'Very patient';
+export type PausePatience = 'Quick' | 'Natural' | 'Patient' | 'Very patient';
 
 export type TurnTakingMode = 'auto' | 'manual';
 
@@ -69,6 +69,7 @@ export interface SessionSettings {
   pausePatience: PausePatience;
   turnTakingMode: TurnTakingMode;
   nativeUpgrade: NativeUpgradeSetting;
+  showLatencyMeter?: boolean;
 }
 
 export type CorrectionCategory =
